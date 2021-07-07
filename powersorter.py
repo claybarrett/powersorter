@@ -23,7 +23,7 @@ def scan_files(path=None, pattern=None, file_type=None):
     Return a list of matching files
     """
     matches = []
-    #print('pattern:', pattern)
+    print('pattern:', pattern)
     file_pattern = re.compile(pattern)
     for root, dirs, files in os.walk(path):
         for file in files:
@@ -35,6 +35,7 @@ def scan_files(path=None, pattern=None, file_type=None):
                 file_dict['file_path'] = file_path
                 file_dict['file_type'] = file_type
                 matches.append(file_dict)
+    print('match count', len(match))
     return matches
 
 def sort_files(files=None, folder_increment=None, number_pad=None, collection_prefix=None, output_path=None):
