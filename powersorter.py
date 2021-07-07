@@ -272,14 +272,21 @@ if __name__ == '__main__':
 
     input_path = Path(settings.files.get('input_path', None))
     #print(settings.catalog_number_regex)
-    # start sorting
-    sort(input_path=input_path, \
-        number_pad=settings.number_pad, \
-        folder_increment=settings.folder_increment, \
-        catalog_number_regex=settings.catalog_number_regex,\
-        collection_prefix=settings.collection_prefix, \
-        file_types=settings.file_types, \
-        destination_base_path=settings.output_base_path)
+    
+    # verify path exists before starting
+    try:
+        os.path.isdir(input_path)
+        # start sorting
+        sort(input_path=input_path, \
+            number_pad=settings.number_pad, \
+            folder_increment=settings.folder_increment, \
+            catalog_number_regex=settings.catalog_number_regex,\
+            collection_prefix=settings.collection_prefix, \
+            file_types=settings.file_types, \
+            destination_base_path=settings.output_base_path)
+    except:
+        print('Input_path was not valid")
+              
     csvfile.close()
     # Summary report
     print('SORT COMPLETE')
