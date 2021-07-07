@@ -286,7 +286,7 @@ if __name__ == '__main__':
             file_types=settings.file_types, \
             destination_base_path=settings.output_base_path)
     except:
-        print('Input_path was not valid")
+        print('Input_path was not valid.')
               
     csvfile.close()
     # Summary report
