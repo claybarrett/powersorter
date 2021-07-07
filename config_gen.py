@@ -21,7 +21,7 @@ files = config['files'] = {}
 files['folder_increment'] = 1000
 files['number_pad'] = 7
 files['log_directory_path'] = '/corral-repl/projects/TORCH/archive/TEST/logs/'
-files['output_base_path'] = '/corral-repl/projects/TORCH/'
+files['output_base_path'] = '/corral-repl/projects/TORCH/ready_to_sort/'
 files['input_path'] = '/corral-repl/projects/TORCH/staging/TEST'
 
 # file_types
