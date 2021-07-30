@@ -35,7 +35,7 @@ def scan_files(path=None, pattern=None, file_type=None):
                 file_dict['file_path'] = file_path
                 file_dict['file_type'] = file_type
                 matches.append(file_dict)
-    print('match count', len(match))
+    print('match count', len(matches))
     return matches
 
 def sort_files(files=None, folder_increment=None, number_pad=None, collection_prefix=None, output_path=None):
