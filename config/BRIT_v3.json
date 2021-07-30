@@ -6,7 +6,7 @@
         "name": "BRIT",
         "prefix": "BRIT",
         "catalog_number_regex": "(?P<catNum>(?P<instID>BRIT)(-(?P<collID>XX)-)*(?P<numerical>\\d+))",
-        "web_base": "/corral-repl/projects/TORCH/web/BRIT/",
+        "web_base": "/corral-repl/projects/TORCH/web/BRIT",
         "url_base": "https://web.corral.tacc.utexas.edu/torch/"
     },
     "files": {
@@ -18,23 +18,23 @@
     },
     "file_types": {
         "web_jpg": {
-            "file_regex": "(_(?P<suffix>.+))*(\\.)(?i)(?P<ext>jpg|jpeg)",
+            "file_regex": "(_(?P<suffix>a-z|0-9))*(\\.)(?i)(?P<ext>jpg|jpeg)",
             "output_sub_path": "web/BRIT/"
         },
         "web_jpg_med": {
-            "file_regex": "(_(?P<suffix>.+))*(_)(?P<size>med)(\\.)(?i)(?P<ext>jpg|jpeg)",
+            "file_regex": "(_(?P<suffix>a-z|0-9))*(_)(?P<size>med)(\\.)(?i)(?P<ext>jpg|jpeg)",
             "output_sub_path": "web/BRIT/"
         },
         "web_jpg_thumb": {
-            "file_regex": "(_(?P<suffix>.+))*(_)(?P<size>thumb)(\\.)(?i)(?P<ext>jpg|jpeg)",
+            "file_regex": "(_(?P<suffix>a-z|0-9))*(_)(?P<size>thumb)(\\.)(?i)(?P<ext>jpg|jpeg)",
             "output_sub_path": "web/BRIT/"
         },
         "archive_dng": {
-            "file_regex": "(_(?P<suffix>.+))*(\\.)(?i)(?P<ext>dng)",
+            "file_regex": "(_(?P<suffix>a-z|0-9))*(\\.)(?i)(?P<ext>dng)",
             "output_sub_path": "archive/BRIT/"
         },
         "ocr": {
-            "file_regex": "(_(?P<suffix>.+))*(_ocr)(\\.)(?i)(?P<ext>txt|json)",
+            "file_regex": "(_(?P<suffix>a-z|0-9))*(_ocr)(\\.)(?i)(?P<ext>txt|json)",
             "output_sub_path": "web/BRIT/"
         }
     }
