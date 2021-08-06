@@ -264,7 +264,7 @@ if __name__ == '__main__':
         username = pwd.getpwuid(os.getuid()).pw_name
     except:
         print('ERROR - Unable to retrive username.')
-        username = None
+        username = 'None'
     
     csvfile = open(log_file_path, 'w', newline='')
     fieldnames = ['timestamp', 'username', 'action', 'result', 'details', 'filetype', 'source', 'destination']
