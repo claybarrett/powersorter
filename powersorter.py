@@ -97,7 +97,7 @@ def move_file(source=None, destination_directory=None, filename=None, filetype=N
         destination_directory.mkdir(parents=True, exist_ok=True)
         #TODO Log creation of directory? If so, will need to force exception and only log when no exception
         if destination.exists() and force_overwrite == False:
-            if verbose:
+            if settings.verbose:
                 print('Filename exists, cannot move:', destination)
             #TODO change to exception
             move_success = False
@@ -110,7 +110,7 @@ def move_file(source=None, destination_directory=None, filename=None, filetype=N
             try:
                 if destination.exists():
                     details = 'duplicate file name - overwritten'
-                    if verbose:
+                    if settings.verbose:
                         print('Overwritting:', destination)  
                 else:
                     details = None
@@ -144,6 +144,8 @@ def arg_setup():
         help="Simulate the sort process without moving files or creating directories.")
     ap.add_argument("-f", "--force", action="store_true", \
         help="Force overwrite of existing files.")
+    ap.add_argument("-s", "--subset", action="store_true", \
+        help="Subset input folders by parent folder name of image (not parent of input folder).")
     args = vars(ap.parse_args())
     return args
 
@@ -244,6 +246,12 @@ class Settings():
                 self.output_base_path = Path(self.files.get('output_base_path', None))
                 # Get the type of files and patterns that will be scanned and sorted
                 self.file_types = config.get('file_types', None)
+                # from url_gen
+                self.web_jpg_regex = self.file_types.get('web_jpg', None).get('file_regex', None)
+                self.web_jpg_med_regex = self.file_types.get('web_jpg_med', None).get('file_regex', None)
+                self.web_jpg_thumb_regex = self.file_types.get('web_jpg_thumb', None).get('file_regex', None)
+                self.web_base = self.collection.get('web_base', None) # path of directory available via HTTP/S
+                self.url_base = self.collection.get('url_base', None) # URL of directory served via HTTP/S
             # Check required config_file version
             if not str(self.config_format) == CONFIG_FORMAT_REQUIRED:
                 print('Wrong config format version:', self.config_format, 'Required:', CONFIG_FORMAT_REQUIRED)
