@@ -6,9 +6,9 @@ Basically just calls powersorter and url_gen.
 """
 import sys
 from zipfile import ZipFile
-import powersorterRF1 as powersorter
+import powersorter
 #import url_genRF1 as url_gen
-from url_genRF1 import generate_url_records_suffixes
+from url_gen import generate_url_records_suffixes
 import shutil
 from pathlib import Path
 import os
@@ -197,6 +197,21 @@ def main():
             file_types=settings.file_types, \
             destination_base_path=settings.output_base_path)
         print(f'sort res', sort_results)
+
+        occurrence_set = generate_url_records_suffixes(settings=settings, input_file=sort_results['log_file_path'])
+        # print(occurrence_set)
+        # Get input file name
+        # input_file_name_stem = Path(input_file).stem
+        input_file_name_stem = Path(sort_results['log_file_path']).stem
+        output_file_name = input_file_name_stem + '_urls.csv'
+        print(f'Writing urls to:', output_file_name)
+
+        with open(output_file_name, 'w', newline='') as csvfile:
+            fieldnames = ['catalog_number', 'large', 'web', 'thumbnail']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for key, image_set in occurrence_set.items():
+                writer.writerow(image_set)
 
     # Summary report
     if verbose:
