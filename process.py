@@ -6,7 +6,7 @@ Basically just calls powersorter and url_gen.
 """
 import sys
 from zipfile import ZipFile
-import powersorter
+import powersorter as powersorter
 #import url_genRF1 as url_gen
 from url_gen import generate_url_records_suffixes
 import shutil
@@ -14,6 +14,8 @@ from pathlib import Path
 import os
 import glob
 import csv
+import re
+from wand.image import Image
 
 def scan_for_archives(dir):
     '''
@@ -34,7 +36,6 @@ def scan_for_archives(dir):
         print(dir, 'not a valid path')
 
     return result
-
 
 def unpack_archives(archive_paths, delete_archive=True):
     '''
@@ -88,6 +89,32 @@ def unpack_archives(archive_paths, delete_archive=True):
 
     return result
 
+deriv_values = {
+    'THUMB': {'DESIGNATOR' : '_thumb', 'SIZE' : 'x390'},
+    'MED' : {'DESIGNATOR' : '_med', 'SIZE' : 'x900'}}
+
+def generate_derivatives(path, settings):
+    '''
+    Takes a path, makes both deriv types from this img using wand.Image.
+    Saves right back where the Orig was located.
+    '''
+
+    for k in deriv_values.keys():
+        try:
+            with Image(filename=path) as original:
+                with original.clone() as derivative:
+                    # resize height, preserve aspect ratio
+                    derivative.transform(resize=deriv_values[k]['SIZE'])
+                    derivative_path = os.path.join(path.parent, path.stem + deriv_values[k]['DESIGNATOR'] + path.suffix)
+                    #print(f'deriv path: {derivative_path}')
+                    derivative.save(filename=derivative_path)
+                    if settings.verbose:
+                        print(f"generated {deriv_values[k]['SIZE']}")
+                    #return derivative_path
+        except Exception as e:
+            print('Unable to create derivative:', e)
+            #return None
+
 def main():
     # set up argparse and get arguments
     args = powersorter.arg_setup()
@@ -98,6 +125,8 @@ def main():
     force_overwrite = args['force']
     input_path_override = args['input_path']
     subset = args['subset']
+    unpack = args['unpack']
+    deriv = args['generate_derivatives']
 
     #Confirm force overwrite
     force_overwrite_confirmed = False
@@ -134,8 +163,14 @@ def main():
     #print(f'archives found:', archives)
     # if any archives, unpack them
     if archives:
-        unpacked = unpack_archives(archives)  # , delete_archive=False
-        print(f'unpacked archives :', unpacked)
+        #print(f'Archives found: {archives}')
+        if dry_run and unpack:
+            print(f'Archives would have been unpacked: {archives}')
+        elif unpack:
+            unpacked = unpack_archives(archives)  # , delete_archive=False
+            print(f'unpacked archives: {unpacked}')
+        else:
+            print(f'Archives would have been unpacked if -unpack: {archives}')
 
     # subset based on parent folders, if flag says to
     if subset:
@@ -146,7 +181,7 @@ def main():
 
         # this strongly supposes the files structure is /INPUT/sortable/jpg
         # would be better to iterate on path/to/sortable?
-        parents = set([f.rpartition('/')[0] for f_ in [glob.glob(e) for e in ('*/*.jpg', '*/*.jpeg')] for f in f_])
+        parents = set([f.rpartition('/')[0] for f_ in [glob.glob(e, recursive = True) for e in ('./**/*.jpg', './**/*.jpeg')] for f in f_])
         print(f'subsetting on:', parents)
         # return chdir
         os.chdir(orig_dir)
@@ -154,6 +189,45 @@ def main():
         # iterate on input+parent paths and call sort, url_gen
         for p in parents:
             subset_path = os.path.join(input_path, p)
+
+            if deriv:
+                # print(f'Somehow gen derivs for', input_path)
+                # test = [f for f_ in [Path(input_path).rglob(e) for e in ('*/*.jpg', '*/*.jpeg')] for f in f_]
+                # print(f'test:', test)
+                # glob is not good at *not* matching stuff, like this gets all JPGs
+                # single folder the */*.jpg pattern fails
+                # will using rglob let this work for nested tho? seems good
+                #print(Path(os.path.join(input_path, subset_path)))
+                jpg_glob = [f for f_ in [Path(os.path.join(input_path, subset_path)).rglob(e) for e in ('*.jpg', '*.jpeg')] for f in f_]
+                #print(f'jpg grab', jpg_glob)
+                # but we could coarsely say, if there are none of these, then gen. still need regex for just the Pri JPGs.
+                med_glob = [f for f_ in [Path(os.path.join(input_path, subset_path)).rglob(e) for e in ('*_med.jpg', '*_med.jpeg')] for f in f_]
+                # print(f'med grab', med_glob)
+                thu_glob = [f for f_ in [Path(os.path.join(input_path, subset_path)).rglob(e) for e in ('*_thumb.jpg', '*_thumb.jpeg')] for f in
+                            f_]
+                # print(f'thu grab', thu_glob)
+
+                # only gen derivs if they are all missing
+                if (len(med_glob) < 1 and len(med_glob) < 1):
+                    print(f'both derivs req')
+                    # coarse glob of ALL jpgs
+                    path_jpg_pattern = re.compile('.*' + settings.catalog_number_regex + settings.web_jpg_regex)
+                    needs_derivs = []
+                    for i in jpg_glob:
+                        # print(i)
+                        # use regex to winnow glob down to just the Primary/Web JPG
+                        m = path_jpg_pattern.match(str(i))
+                        if m:
+                            # print(m, m.groupdict())
+                            needs_derivs.append(i)
+                    for i in needs_derivs:
+                        #print(i)
+                        print(f' - generating {len(needs_derivs)} x2 derivs (will take a bit)')
+                        generate_derivatives(i, settings)
+                elif len(med_glob) < 1:
+                    print(f' med derivs req')
+                elif len(thu_glob) < 1:
+                    print(f' thu derivs req')
 
             print(f'sorting subfolder', subset_path)
             sort_results = powersorter.sort(
@@ -165,8 +239,10 @@ def main():
                 collection_prefix=settings.collection_prefix, \
                 file_types=settings.file_types, \
                 destination_base_path=settings.output_base_path)
-            print(f'sorted_file_count', sort_results['sorted_file_count'])
-            print(f'unmoved_file_count', sort_results['unmoved_file_count'])
+            # Summary report
+            if verbose:
+                print(f'sorted_file_count', sort_results['sorted_file_count'])
+                print(f'unmoved_file_count', sort_results['unmoved_file_count'])
             print(f'Log file written to:', sort_results['log_file_path'])
             print(f'Starting URL_GEN for the log file.')
 
@@ -184,8 +260,46 @@ def main():
                 writer.writeheader()
                 for key, image_set in occurrence_set.items():
                     writer.writerow(image_set)
+
     else:
     # sort once
+        if deriv:
+            #print(f'Somehow gen derivs for', input_path)
+            #test = [f for f_ in [Path(input_path).rglob(e) for e in ('*/*.jpg', '*/*.jpeg')] for f in f_]
+            #print(f'test:', test)
+            # glob is not good at *not* matching stuff, like this gets all JPGs
+            # single folder the */*.jpg pattern fails
+            # will using rglob let this work for nested tho? seems good
+            jpg_glob = [f for f_ in [Path(input_path).rglob(e)for e in ('*.jpg', '*.jpeg')] for f in f_]
+            #print(f'jpg grab', jpg_glob)
+            # but we could coarsely say, if there are none of these, then gen. still need regex for just the Pri JPGs.
+            med_glob = [f for f_ in [Path(input_path).rglob(e) for e in ('*_med.jpg', '*_med.jpeg')] for f in f_]
+            #print(f'med grab', med_glob)
+            thu_glob = [f for f_ in [Path(input_path).rglob(e)for e in ('*_thumb.jpg', '*_thumb.jpeg')] for f in f_]
+            #print(f'thu grab', thu_glob)
+
+            # only gen derivs if they are all missing
+            if (len(med_glob) < 1 and len(med_glob) < 1):
+                print(f'both derivs req')
+                # coarse glob of ALL jpgs
+                path_jpg_pattern = re.compile('.*' + settings.catalog_number_regex + settings.web_jpg_regex)
+                needs_derivs = []
+                for i in jpg_glob:
+                    # print(i)
+                    # use regex to winnow glob down to just the Primary/Web JPG
+                    m = path_jpg_pattern.match(str(i))
+                    if m:
+                        # print(m, m.groupdict())
+                        needs_derivs.append(i)
+                for i in needs_derivs:
+                    #print(i)
+                    print(f' - generating {len(needs_derivs)} x2 derivs (will take a bit)')
+                    generate_derivatives(i, settings)
+            elif len(med_glob) < 1:
+                print(f' med derivs req')
+            elif len(thu_glob) < 1:
+                print(f' thu derivs req')
+
         print('STARTING sort')
         sort_results = powersorter.sort(
             settings_obj=settings, \
@@ -196,7 +310,7 @@ def main():
             collection_prefix=settings.collection_prefix, \
             file_types=settings.file_types, \
             destination_base_path=settings.output_base_path)
-        print(f'sort res', sort_results)
+        print(f'sort res: {sort_results}')
 
         occurrence_set = generate_url_records_suffixes(settings=settings, input_file=sort_results['log_file_path'])
         # print(occurrence_set)
@@ -213,11 +327,11 @@ def main():
             for key, image_set in occurrence_set.items():
                 writer.writerow(image_set)
 
-    # Summary report
-    if verbose:
-        print(f'sorted_file_count', sort_results['sorted_file_count'])
-        print(f'unmoved_file_count', sort_results['unmoved_file_count'])
-    print(f'Log file written to:', sort_results['log_file_path'])
+        # Summary report
+        if verbose:
+            print(f'sorted_file_count', sort_results['sorted_file_count'])
+            print(f'unmoved_file_count', sort_results['unmoved_file_count'])
+        print(f'Log file written to:', sort_results['log_file_path'])
     print(f'Process COMPLETE')
 
 if __name__ == '__main__':

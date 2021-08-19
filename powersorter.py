@@ -146,6 +146,10 @@ def arg_setup():
         help="Force overwrite of existing files.")
     ap.add_argument("-s", "--subset", action="store_true", \
         help="Subset input folders by parent folder name of image (not parent of input folder).")
+    ap.add_argument("-u", "--unpack", action="store_true", \
+        help="Attempt to 'unzip' any archive files found.")
+    ap.add_argument("-g", "--generate_derivatives", action="store_true", \
+        help="Attempt to make derivatives if missing.")
     args = vars(ap.parse_args())
     return args
 
