@@ -6,9 +6,9 @@ Basically just calls powersorter and url_gen.
 """
 import sys
 from zipfile import ZipFile
-import powersorter as powersorter
+import powersorterRF1 as powersorter
 #import url_genRF1 as url_gen
-from url_gen import generate_url_records_suffixes
+from url_genRF1 import generate_url_records_suffixes
 import shutil
 from pathlib import Path
 import os
@@ -16,6 +16,8 @@ import glob
 import csv
 import re
 from wand.image import Image
+from collections import Counter
+Problem = []
 
 def scan_for_archives(dir):
     '''
@@ -30,7 +32,13 @@ def scan_for_archives(dir):
     try:
         folders = [f for f in Path(dir).iterdir()]
         archives = [f for f in Path(dir).iterdir() if any(f.match(p) for p in ext_patterns)]
-        print(f'found', len(archives), 'archives to unpack out of', len(folders), 'total folders')
+        not_unpackable = [f for f in Path(dir).iterdir() if not any(f.match(p) for p in ext_patterns)]
+        print(f'found {len(archives)} archives to unpack out of {len(folders)} total folders')
+        if not_unpackable:
+            print(f'found {len(not_unpackable)} folders or archives that cannot be unpacked: {not_unpackable}')
+            msg = 'could not unpack' + str(not_unpackable)
+            #print(f'{msg}')
+            Problem.append([msg])
         result = archives
     except:
         print(dir, 'not a valid path')
@@ -51,6 +59,7 @@ def unpack_archives(archive_paths, delete_archive=True):
         name = arc.stem
         # ext = arc.suffixes
         new_folder = os.path.join(loc, name)
+        unpacked = 0
 
         try:
             # if zip, just unpack JPG/DNG using ZipFile
@@ -60,30 +69,60 @@ def unpack_archives(archive_paths, delete_archive=True):
                     ret = zip_object.testzip()
                     if ret is not None:
                         print(f'First bad file in zip:', ret)
+                        Problem.append(ret)
                     else:
                         print(f'Zip archive', arc, 'is good.')
 
                     list_names = zip_object.namelist()
+                    #print(list_names)
+                    # we should do a quick survey to detect simple file mismatches
+                    ext_list = [i.split('.')[1].lower() for i in list_names if '.' in i]
+                    #print(ext_list)
+                    zip_result = zip_survey(ext_list)
+                    #print(ext_list, zip_result)
+                    if not ext_list:
+                        msg = 'Nothing extracted from ' + name
+                        print(msg)
+                        Problem.append(msg)
+                    elif zip_result < 0:
+                        print(f'No RAW detected in archive.')
+                    elif zip_result == 0:
+                        msg = 'More RAW detected than expected from ' + name
+                        print(msg)
+                        Problem.append([msg])
+
                     for file_name in list_names:
                         if file_name.lower().endswith(tuple(['.jpg', '.jpeg', '.dng'])):
-                            # Extract any file with these exts from zip
+                            # Extract any file with these exts from zip (skip RAW)
                             zip_object.extract(file_name, arc.parent)
                             # if verbose:
                             #   print(f'Extracting', file_name)
+                            unpacked = 1
             # otherwise, fallback to shutil
             else:
-                # 3.6 this can't handle path objects
-                shutil.unpack_archive(str(arc), arc.parent)
+                try:
+                    # 3.6 this can't handle path objects
+                    shutil.unpack_archive(str(arc), arc.parent)
+                    unpacked = 1
+                except:
+                    print(f"Unexpected error unpacking:", arc, sys.exc_info()[0])
             result.append(new_folder)
             # print('unpacked', new_folder)
 
-            # remove the archive if everything worked
-            if delete_archive:
+            # remove the archive if it was unpacked
+            if delete_archive and unpacked == 1:
                 os.remove(arc)
+            elif delete_archive and unpacked == 0:
+                msg = 'Nothing was unpacked from archive named' + arc.name
+                print(f"Nothing was unpacked from archive named {arc.name}.")
+                Problem.append([msg])
         except ValueError:
             print(arc.stuffix, 'was not valid unpack archive type:', shutil.get_unpack_formats())
+            Problem.append(ValueError)
         except:
+            error = sys.exc_info()[0]
             print(f"Unexpected error:", sys.exc_info()[0])
+            Problem.append(error)
             # print("Unexpected error:")
             raise
 
@@ -113,7 +152,107 @@ def generate_derivatives(path, settings):
                     #return derivative_path
         except Exception as e:
             print('Unable to create derivative:', e)
+            Problem.append(e)
             #return None
+
+def zip_survey(inp):
+    '''
+    Accept a list of extensions.
+    Check the RAW file count matches JPG/DNG.
+    Since only these are not unpacked.
+    '''
+    result = -1
+    raw_list = ['raw', 'nef', 'cr2']
+    jpg_list = ['jpg', 'jpeg']
+    # make a counter object, to get a nice dict with counts
+    c = Counter(inp)
+    #print(f'Zip Counter: {c}')
+    # if any raw formats, do stuff
+    if any(e in c.keys() for e in raw_list):
+        #print(f'need to count various exts')
+        # aggregate for variations of RAW files
+        raw_count = sum([c[i] for i in c if i in raw_list])
+        #print(f'count of raws: {raw_count}')
+        # aggregate for variations of JPG format
+        jpg_count = sum([c[i] for i in c if i in jpg_list])
+        #print(f'count of jpgs: {jpg_count}')
+
+        if raw_count == c['dng'] == jpg_count:
+            #print(f' > Needs Derivs Generated')
+            result = 1
+        elif raw_count == c['dng'] == jpg_count // 3:
+            #print(f' > Has Derivs Generated')
+            result = 1
+        elif raw_count > c['dng'] or raw_count > jpg_count:
+            #print(f' > More RAW than DNG or JPG')
+            result = 0
+        elif raw_count < c['dng'] or raw_count < jpg_count:
+            #print(f' > Less RAW than DNG or JPG')
+            result = 0
+        else:
+            #print(f' > UNCASED RESULT 0')
+            result = 0
+    else:
+        print(f'No RAW detected')
+
+    return result
+
+def ext_survey(inp):
+    '''
+    Accept a list of extensions.
+    Test some things, try to eval if anything is missing.
+    '''
+    #result = []
+    result = -1
+    raw_list = ['raw', 'nef', 'cr2']
+    jpg_list = ['jpg', 'jpeg']
+
+    # make a counter object, to get a nice dict with counts
+    c = Counter(inp)
+    #print(f'ext counter: {c}')
+
+    # if any raw formats, do stuff
+    #if any(e in c.keys() for e in raw_list):
+        #print(f'need to count various exts')
+    # aggregate for variations of RAW files
+    raw_count = sum([c[i] for i in c if i in raw_list])
+    #print(f'count of raws: {raw_count}')
+    # aggregate for variations of JPG format
+    jpg_count = sum([c[i] for i in c if i in jpg_list])
+    #print(f'count of jpgs: {jpg_count}')
+
+    # expecting NEF/DNG/JPG
+    #else:
+    if len(c) == 3:
+        print(f'probably the right ones?')
+        if raw_count == c['dng'] == jpg_count:
+            print(f' > Needs Derivs Generated')
+            result = 1
+        elif raw_count == c['dng'] == jpg_count // 3:
+            print(f' > Has Derivs Generated')
+            result = 1
+        else:
+            print(f' > UNCASED RESULT A')
+            result = 0
+    elif len(c) == 2:
+        print(f'probably missing raw? (acceptable)')
+        if c['dng'] == jpg_count:
+            print(f' > Needs Derivs Generated')
+            result = 1
+        elif c['dng'] == jpg_count//3:
+            print(f' > Has Derivs Generated')
+            result = 1
+        else:
+            print(f' > UNCASED RESULT B')
+            result = 0
+    elif len(c) == 1:
+        print(f' > probably just raw?')
+        #
+    else:
+        print(f' > UNCASED RESULT C')
+        result = 1
+
+    return result
 
 def main():
     # set up argparse and get arguments
@@ -190,6 +329,14 @@ def main():
         for p in parents:
             subset_path = os.path.join(input_path, p)
 
+            # quick survey of contents (by ext)
+            ext_list = [i.suffix.replace('.', '') for i in Path(os.path.join(input_path, subset_path)).glob('*.*')]
+            print(ext_list)
+            # strip the period out from .suffix
+            #ext_list = ext_list.replace('.', '')
+            ext_result = ext_survey(ext_list)
+            #print(ext_list, ext_result)
+
             if deriv:
                 # print(f'Somehow gen derivs for', input_path)
                 # test = [f for f_ in [Path(input_path).rglob(e) for e in ('*/*.jpg', '*/*.jpeg')] for f in f_]
@@ -220,9 +367,9 @@ def main():
                         if m:
                             # print(m, m.groupdict())
                             needs_derivs.append(i)
+                    print(f' - generating {len(needs_derivs)} x2 derivs (will take a bit)')
                     for i in needs_derivs:
                         #print(i)
-                        print(f' - generating {len(needs_derivs)} x2 derivs (will take a bit)')
                         generate_derivatives(i, settings)
                 elif len(med_glob) < 1:
                     print(f' med derivs req')
@@ -241,8 +388,14 @@ def main():
                 destination_base_path=settings.output_base_path)
             # Summary report
             if verbose:
-                print(f'sorted_file_count', sort_results['sorted_file_count'])
-                print(f'unmoved_file_count', sort_results['unmoved_file_count'])
+                print(f"sorted_file_count {sort_results['sorted_file_count']}")
+                print(f"unmoved_file_count {sort_results['unmoved_file_count']}")
+                if sort_results['unmoved_file_count']:
+                    print(f' < Leftover Files >')
+                    leftover_glob = [f for f_ in [Path(input_path).rglob(e) for e in ('*.jpg', '*.jpeg')] for f in f_]
+                    #print(f'left {leftover_glob}')
+                    for i in leftover_glob:
+                        print(f' - {i}')
             print(f'Log file written to:', sort_results['log_file_path'])
             print(f'Starting URL_GEN for the log file.')
 
@@ -291,9 +444,9 @@ def main():
                     if m:
                         # print(m, m.groupdict())
                         needs_derivs.append(i)
+                print(f' - generating {len(needs_derivs)} x2 derivs (will take a bit)')
                 for i in needs_derivs:
                     #print(i)
-                    print(f' - generating {len(needs_derivs)} x2 derivs (will take a bit)')
                     generate_derivatives(i, settings)
             elif len(med_glob) < 1:
                 print(f' med derivs req')
@@ -329,10 +482,22 @@ def main():
 
         # Summary report
         if verbose:
-            print(f'sorted_file_count', sort_results['sorted_file_count'])
-            print(f'unmoved_file_count', sort_results['unmoved_file_count'])
+            print(f"sorted_file_count {sort_results['sorted_file_count']}")
+            print(f"unmoved_file_count {sort_results['unmoved_file_count']}")
+            # ya know, it would be nice to know more about these
+        #print(sort_results['unmoved_file_count'])
+        if sort_results['unmoved_file_count']:
+            print(f' < Leftover Files >')
+            leftover_glob = [f for f_ in [Path(input_path).rglob(e)for e in ('*.jpg', '*.jpeg')] for f in f_]
+            print(f'left {leftover_glob}')
+            for i in leftover_glob:
+                print(f' - {i}')
         print(f'Log file written to:', sort_results['log_file_path'])
     print(f'Process COMPLETE')
+    if Problem:
+        print(f' < Problem listing >')
+        for i in Problem:
+            print(f' - {i}')
 
 if __name__ == '__main__':
     main()
