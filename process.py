@@ -6,9 +6,9 @@ Basically just calls powersorter and url_gen.
 """
 import sys
 from zipfile import ZipFile
-import powersorterRF1 as powersorter
+import powersorter as powersorter
 #import url_genRF1 as url_gen
-from url_genRF1 import generate_url_records_suffixes
+from url_gen import generate_url_records_suffixes
 import shutil
 from pathlib import Path
 import os
@@ -28,27 +28,31 @@ def scan_for_archives(dir):
 
     other_exts = [i[1] for i in shutil.get_unpack_formats()]
     ext_patterns = ['*' + i for g in other_exts for i in g]
-    # print(ext_patterns)
+    #print(ext_patterns)
     try:
-        folders = [f for f in Path(dir).iterdir()]
+        everything = [f for f in Path(dir).iterdir()]
+        #folders = [f for f in Path(dir).iterdir() if f.is_dir()]
         archives = [f for f in Path(dir).iterdir() if any(f.match(p) for p in ext_patterns)]
-        not_unpackable = [f for f in Path(dir).iterdir() if not any(f.match(p) for p in ext_patterns)]
-        print(f'found {len(archives)} archives to unpack out of {len(folders)} total folders')
+        #print(f'everything: {everything} \n fold: {folders} \n arch: {archives}')
+        [f for f in Path(test_inp).iterdir() if '.' in f.suffix if not any(f.match(p) for p in ext_patterns)]
+        #print(not_unpackable)
+        #print(f'{len(everything), len(folders), len(archives), len(not_unpackable)}')
+        print(f'found {len(archives)} archives to unpack out of {len(everything)} total folders and/or archives.')
         if not_unpackable:
-            print(f'found {len(not_unpackable)} folders or archives that cannot be unpacked: {not_unpackable}')
-            msg = 'could not unpack' + str(not_unpackable)
+            print(f'found {len(not_unpackable)} archives that cannot be unpacked: {not_unpackable}')
+            msg = 'could not unpack ' + str(not_unpackable)
             #print(f'{msg}')
             Problem.append([msg])
         result = archives
-    except:
-        print(dir, 'not a valid path')
+    except Exception as e:
+        print(f'Exception processing {dir}: due to {e}')
 
     return result
 
 def unpack_archives(archive_paths, delete_archive=True):
     '''
     Accepts a list of folder(s) (paths?). Replaces them with unzipped folder of the same name.
-    Zips it tests for corruptions then only extracts the JPG and DNG file extensions found.
+    Zips it tests for corruptions then only extracts the JPG and DNG file extensions found (tested up to 65 GB).
     Other archive types are handled by shutil.
     '''
     result = []
@@ -331,7 +335,7 @@ def main():
 
             # quick survey of contents (by ext)
             ext_list = [i.suffix.replace('.', '') for i in Path(os.path.join(input_path, subset_path)).glob('*.*')]
-            print(ext_list)
+            #print(ext_list)
             # strip the period out from .suffix
             #ext_list = ext_list.replace('.', '')
             ext_result = ext_survey(ext_list)
