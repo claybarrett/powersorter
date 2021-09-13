@@ -34,7 +34,7 @@ def scan_for_archives(dir):
         #folders = [f for f in Path(dir).iterdir() if f.is_dir()]
         archives = [f for f in Path(dir).iterdir() if any(f.match(p) for p in ext_patterns)]
         #print(f'everything: {everything} \n fold: {folders} \n arch: {archives}')
-        [f for f in Path(test_inp).iterdir() if '.' in f.suffix if not any(f.match(p) for p in ext_patterns)]
+        not_unpackable = [f for f in Path(test_inp).iterdir() if '.' in f.suffix if not any(f.match(p) for p in ext_patterns)]
         #print(not_unpackable)
         #print(f'{len(everything), len(folders), len(archives), len(not_unpackable)}')
         print(f'found {len(archives)} archives to unpack out of {len(everything)} total folders and/or archives.')
